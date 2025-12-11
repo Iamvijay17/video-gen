@@ -11,7 +11,10 @@ video-gen/
 │   ├── public/
 │   ├── package.json
 │   └── vite.config.js
-├── backend/           # (Future) API backend service
+├── backend/           # Express.js backend API
+│   ├── index.js       # Main server file with health route
+│   ├── package.json
+│   └── Dockerfile
 ├── docker-compose.yml # Multi-service Docker orchestration
 ├── Dockerfile         # Frontend container build
 ├── nginx.conf         # Nginx configuration for frontend
@@ -71,7 +74,6 @@ To add backend services:
 ## Technologies
 
 - **Frontend**: React 19, Vite, ESLint
+- **Backend**: Node.js, Express
 - **Container**: Docker, Docker Compose
 - **Web Server**: Nginx
-- **Future Backend**: Node.js/Python (TBD)
-- **Future Database**: --- (not-planned)

@@ -18,21 +18,17 @@ services:
     networks:
       - video-gen-network
 
-  # Placeholder for future backend API service
-  # api:
-  #   build:
-  #     context: ./backend
-  #     dockerfile: Dockerfile
-  #   ports:
-  #     - "8000:8000"
-  #   environment:
-  #     - NODE_ENV=production
-  #   restart: unless-stopped
-  #   volumes:
-  #     - ./backend:/app
-  #     - /app/node_modules
-  #   networks:
-  #     - video-gen-network
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped
+    networks:
+      - video-gen-network
 
   # Placeholder for database service
   # db:
