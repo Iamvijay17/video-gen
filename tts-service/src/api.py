@@ -78,4 +78,7 @@ async def delete_audio(filename: str):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=5000)
+    host = os.getenv("HOST", "127.0.0.1")
+    port = int(os.getenv("PORT", 5000))
+    print(f"Starting TTS service on {host}:{port}")
+    uvicorn.run(app, host=host, port=port)
