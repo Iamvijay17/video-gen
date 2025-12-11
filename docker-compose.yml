@@ -30,6 +30,20 @@ services:
     networks:
       - video-gen-network
 
+  tts:
+    build:
+      context: ./tts-service
+      dockerfile: Dockerfile
+    ports:
+      - "5000:5000"
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+    volumes:
+      - ./storage:/app/output
+    networks:
+      - video-gen-network
+
   # Placeholder for database service
   # db:
   #   image: postgres:15-alpine

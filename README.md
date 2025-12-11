@@ -15,6 +15,11 @@ video-gen/
 │   ├── index.js       # Main server file with health route
 │   ├── package.json
 │   └── Dockerfile
+├── tts-service/       # Python TTS service using FastAPI
+│   ├── src/api.py     # TTS API with gTTS integration
+│   ├── requirements.txt
+│   ├── Dockerfile
+│   └── .env
 ├── docker-compose.yml # Multi-service Docker orchestration
 ├── Dockerfile         # Frontend container build
 ├── nginx.conf         # Nginx configuration for frontend
@@ -50,6 +55,27 @@ docker-compose logs
 ```
 
 Frontend will be available at: http://localhost:3000
+
+### TTS Service
+
+The TTS (Text-to-Speech) service provides audio generation capabilities:
+
+**Endpoints:**
+- `GET /health` - Health check
+- `POST /generate` - Generate speech from text
+- `GET /audio/{filename}` - Retrieve generated audio
+- `DELETE /audio/{filename}` - Delete audio file
+
+**Example usage:**
+```bash
+# Generate speech
+curl -X POST http://localhost:5000/generate \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Hello, world!", "lang": "en"}'
+
+# Get audio file
+curl http://localhost:5000/audio/{file_id}.mp3
+```
 
 ### Environment Variables
 
