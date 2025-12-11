@@ -5,6 +5,7 @@ WORKDIR /app
 # Install system dependencies for audio processing
 RUN apt-get update && apt-get install -y \
     ffmpeg \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install Python dependencies
