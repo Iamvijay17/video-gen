@@ -141,3 +141,7 @@ node_modules
 
 package-lock.json
 backend/src/remotion/node_modules
+
+__pycache__
+
+backend/src/.DS_Store

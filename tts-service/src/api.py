@@ -11,7 +11,14 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-app = FastAPI(title="TTS Service", version="1.0.0")
+app = FastAPI(
+    title="TTS Service",
+    version="1.0.0",
+    description="A Text-to-Speech service built with FastAPI that converts text to audio using Google TTS.",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json"
+)
 
 # CORS middleware
 app.add_middleware(
@@ -30,11 +37,11 @@ class TTSRequest(BaseModel):
     text: str
     lang: str = "en"
 
-@app.get("/health")
+@app.get("/health", tags=["Health"])
 async def health_check():
     return {"status": "healthy", "service": "tts"}
 
-@app.post("/generate")
+@app.post("/generate", tags=["TTS"])
 async def generate_speech(request: TTSRequest):
     try:
         # Generate unique filename
@@ -56,7 +63,7 @@ async def generate_speech(request: TTSRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"TTS generation failed: {str(e)}")
 
-@app.get("/audio/{filename}")
+@app.get("/audio/{filename}", tags=["Audio"])
 async def get_audio(filename: str):
     filepath = OUTPUT_DIR / filename
     if not filepath.exists():
@@ -68,7 +75,7 @@ async def get_audio(filename: str):
         filename=filename
     )
 
-@app.delete("/audio/{filename}")
+@app.delete("/audio/{filename}", tags=["Audio"])
 async def delete_audio(filename: str):
     filepath = OUTPUT_DIR / filename
     if filepath.exists():

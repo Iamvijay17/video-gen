@@ -14,6 +14,14 @@ The service follows a microservice architecture pattern:
 - **Storage**: Local file system with configurable output directory
 - **Containerization**: Docker for consistent deployment
 
+## API Documentation
+
+The TTS service provides interactive API documentation through Swagger UI and ReDoc:
+
+- **Swagger UI**: `http://localhost:5050/docs` - Interactive API documentation with testing capabilities
+- **ReDoc**: `http://localhost:5050/redoc` - Alternative API documentation view
+- **OpenAPI JSON**: `http://localhost:5050/openapi.json` - OpenAPI specification
+
 ## API Endpoints
 
 ### Health Check
