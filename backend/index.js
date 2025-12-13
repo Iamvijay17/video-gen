@@ -1,4 +1,5 @@
 const express = require('express');
+const cors = require('cors');
 const connectDB = require('./src/config/database');
 
 const app = express();
@@ -6,6 +7,19 @@ const PORT = process.env.PORT || 8000;
 
 // Connect to MongoDB
 connectDB();
+
+// CORS middleware
+app.use(cors({
+  origin: [
+    'http://localhost:5173', // Vite dev server
+    'http://localhost:3000', // Alternative frontend port
+    'http://127.0.0.1:5173',
+    'http://127.0.0.1:3000',
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
 
 // Middleware
 app.use(express.json());
