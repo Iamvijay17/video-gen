@@ -117,7 +117,7 @@ PORT=5000
 HOST=0.0.0.0
 
 # Audio output settings
-OUTPUT_DIR=output
+OUTPUT_DIR=audio
 AUDIO_FORMAT=mp3
 
 # TTS Engine settings
