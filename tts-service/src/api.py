@@ -30,7 +30,7 @@ app.add_middleware(
 )
 
 # Create output directory if it doesn't exist
-OUTPUT_DIR = Path(os.getenv("OUTPUT_DIR", "output"))
+OUTPUT_DIR = Path(os.getenv("OUTPUT_DIR", "audio"))
 OUTPUT_DIR.mkdir(exist_ok=True)
 
 class TTSRequest(BaseModel):

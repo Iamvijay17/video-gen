@@ -134,7 +134,7 @@ CORS_ORIGINS=http://localhost:3000,http://localhost:8000
 |----------|-------------|---------|
 | `PORT` | Port to run the service on | `5000` |
 | `HOST` | Host to bind to | `0.0.0.0` |
-| `OUTPUT_DIR` | Directory for audio file storage | `output` |
+| `OUTPUT_DIR` | Directory for audio file storage | `audio` |
 | `AUDIO_FORMAT` | Audio format for generated files | `mp3` |
 | `DEFAULT_LANGUAGE` | Default language for TTS | `en` |
 | `DEFAULT_VOICE_SPEED` | Speech speed multiplier | `1.0` |
@@ -204,7 +204,7 @@ For Docker deployment, the following system packages are installed:
 
 2. **Run the container:**
    ```bash
-   docker run -p 5000:5000 -v $(pwd)/output:/app/output tts-service
+   docker run -p 5000:5000 -v $(pwd)/storage:/app/output tts-service
    ```
 
 ### Docker Compose (with other services)
