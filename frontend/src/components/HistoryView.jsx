@@ -2,14 +2,16 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 import * as Tabs from '@radix-ui/react-tabs';
 import * as ScrollArea from '@radix-ui/react-scroll-area';
-import { Mic, Video, Play, Download, Trash2, Loader2, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { Mic, Video, Play, Download, Trash2, Loader2, CheckCircle, XCircle, Clock, Eye, EyeOff } from 'lucide-react';
 import { cn } from '../lib/utils';
+import VideoPlayer from './VideoPlayer';
 
 const HistoryView = () => {
   const [ttsHistory, setTtsHistory] = useState([]);
   const [videoHistory, setVideoHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('tts');
+  const [previewVideoId, setPreviewVideoId] = useState(null);
 
   useEffect(() => {
     fetchHistory();
@@ -96,6 +98,21 @@ const HistoryView = () => {
     default:
       return 'text-gray-600';
     }
+  };
+
+  const getVideoUrl = (outputPath) => {
+    // Convert file path to HTTP URL
+    // Assuming outputPath is something like '/path/to/project/storage/videos/filename.mp4'
+    // We need to extract just the relative path from storage
+    const pathParts = outputPath.split('storage');
+    if (pathParts.length > 1) {
+      return `http://localhost:8000/storage${pathParts[1]}`;
+    }
+    return null;
+  };
+
+  const toggleVideoPreview = (jobId) => {
+    setPreviewVideoId(previewVideoId === jobId ? null : jobId);
   };
 
   if (loading) {
@@ -205,51 +222,72 @@ const HistoryView = () => {
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {videoHistory.map((job) => (
-                      <div key={job._id} className="bg-muted/50 rounded-lg p-4 border">
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <p className="font-medium text-card-foreground mb-1">
-                              {job.inputProps?.titleText || 'Untitled Video'}
-                            </p>
-                            <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                              <span>Composition: {job.compositionId}</span>
-                              <span>Started: {new Date(job.createdAt).toLocaleString()}</span>
-                              {job.completedAt && (
-                                <span>Completed: {new Date(job.completedAt).toLocaleString()}</span>
-                              )}
-                              <span className={cn("flex items-center gap-1", getStatusColor(job.status))}>
-                                {getStatusIcon(job.status)}
-                                {job.status}
-                              </span>
-                            </div>
-                            {job.status === 'failed' && job.error && (
-                              <p className="text-sm text-red-600 mt-2 bg-red-50 p-2 rounded">
-                                Error: {job.error}
+                    {videoHistory.map((job) => {
+                      const videoUrl = job.status === 'completed' ? getVideoUrl(job.outputPath) : null;
+                      const isPreviewing = previewVideoId === job._id;
+
+                      return (
+                        <div key={job._id} className="bg-muted/50 rounded-lg p-4 border">
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <p className="font-medium text-card-foreground mb-1">
+                                {job.inputProps?.titleText || 'Untitled Video'}
                               </p>
-                            )}
-                          </div>
-                          <div className="flex gap-2">
-                            {job.status === 'completed' && (
+                              <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                                <span>Composition: {job.compositionId}</span>
+                                <span>Started: {new Date(job.createdAt).toLocaleString()}</span>
+                                {job.completedAt && (
+                                  <span>Completed: {new Date(job.completedAt).toLocaleString()}</span>
+                                )}
+                                <span className={cn("flex items-center gap-1", getStatusColor(job.status))}>
+                                  {getStatusIcon(job.status)}
+                                  {job.status}
+                                </span>
+                              </div>
+                              {job.status === 'failed' && job.error && (
+                                <p className="text-sm text-red-600 mt-2 bg-red-50 p-2 rounded">
+                                  Error: {job.error}
+                                </p>
+                              )}
+
+                              {/* Video Preview */}
+                              {isPreviewing && videoUrl && (
+                                <div className="mt-4">
+                                  <VideoPlayer
+                                    src={videoUrl}
+                                    title={job.inputProps?.titleText || 'Video Preview'}
+                                    className="w-full max-h-64"
+                                  />
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex gap-2">
+                              {job.status === 'completed' && videoUrl && (
+                                <button
+                                  onClick={() => toggleVideoPreview(job._id)}
+                                  className={cn(
+                                    "p-2 rounded-md transition-colors",
+                                    isPreviewing
+                                      ? "bg-blue-500 text-white hover:bg-blue-600"
+                                      : "bg-secondary text-secondary-foreground hover:bg-secondary/80"
+                                  )}
+                                  title={isPreviewing ? "Hide Preview" : "Preview Video"}
+                                >
+                                  {isPreviewing ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                </button>
+                              )}
                               <button
-                                onClick={() => window.open(`file://${job.outputPath}`, '_blank')}
-                                className="p-2 bg-secondary text-secondary-foreground rounded-md hover:bg-secondary/80 transition-colors"
-                                title="View Video"
+                                onClick={() => handleDeleteVideo(job._id)}
+                                className="p-2 bg-destructive text-destructive-foreground rounded-md hover:bg-destructive/80 transition-colors"
+                                title="Delete"
                               >
-                                <Video className="w-4 h-4" />
+                                <Trash2 className="w-4 h-4" />
                               </button>
-                            )}
-                            <button
-                              onClick={() => handleDeleteVideo(job._id)}
-                              className="p-2 bg-destructive text-destructive-foreground rounded-md hover:bg-destructive/80 transition-colors"
-                              title="Delete"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </ScrollArea.Viewport>

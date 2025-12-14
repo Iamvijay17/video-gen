@@ -24,6 +24,9 @@ app.use(cors({
 // Middleware
 app.use(express.json());
 
+// Static file serving for storage
+app.use('/storage', express.static('storage'));
+
 // Routes
 const videoRoutes = require('./src/api/video');
 const ttsRoutes = require('./src/api/tts');
