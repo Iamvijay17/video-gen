@@ -17,6 +17,12 @@ COPY package*.json ./
 
 RUN npm install
 
+# Install dependencies for Remotion project
+COPY src/remotion/package*.json ./src/remotion/
+WORKDIR /app/src/remotion
+RUN npm install
+WORKDIR /app
+
 COPY . .
 
 EXPOSE 8000
