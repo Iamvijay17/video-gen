@@ -32,23 +32,11 @@ const videoJobSchema = new mongoose.Schema({
   error: {
     type: String,
   },
-  createdAt: {
-    type: Date,
-    default: Date.now,
-  },
-  updatedAt: {
-    type: Date,
-    default: Date.now,
-  },
   completedAt: {
     type: Date,
   },
-});
-
-// Update the updatedAt field before saving
-videoJobSchema.pre('save', function(next) {
-  this.updatedAt = Date.now();
-  next();
+}, {
+  timestamps: true,
 });
 
 module.exports = mongoose.model('VideoJob', videoJobSchema);

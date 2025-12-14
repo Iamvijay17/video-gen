@@ -26,7 +26,7 @@ services:
       - "8000:8000"
     environment:
       - NODE_ENV=production
-      - MONGODB_URI=mongodb://127.0.0.1:27017/mydatabase
+      - MONGODB_URI=mongodb://admin:password@db:27017/video_gen?authSource=admin
       - TTS_SERVICE_URL=http://tts:5000
     restart: unless-stopped
     depends_on:

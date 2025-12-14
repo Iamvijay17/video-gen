@@ -1,4 +1,15 @@
-FROM node:20-alpine
+FROM node:20-slim
+
+# Install Chromium for Remotion
+RUN apt-get update && apt-get install -y \
+    chromium \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set PUPPETEER_SKIP_CHROMIUM_DOWNLOAD to true since we installed Chromium manually
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+
+# Set the executable path for Chromium
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
 WORKDIR /app
 

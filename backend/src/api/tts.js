@@ -6,7 +6,7 @@ const path = require('path');
 const router = express.Router();
 
 // TTS service URL
-const TTS_SERVICE_URL = process.env.TTS_SERVICE_URL || 'http://localhost:5050';
+const TTS_SERVICE_URL = process.env.TTS_SERVICE_URL || 'http://localhost:5051';
 
 // POST /api/tts/generate
 router.post('/generate', async (req, res) => {
