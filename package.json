@@ -1,0 +1,34 @@
+{
+  "name": "video-gen",
+  "version": "1.0.0",
+  "description": "Video Generation Studio - Complete video generation application with TTS, video rendering, and combined audio-video generation",
+  "main": "index.js",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:frontend\" \"npm run dev:backend\" \"npm run dev:tts\"",
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:tts": "cd tts-service && python src/api.py",
+    "install:all": "npm install && cd frontend && npm install && cd ../backend && npm install && cd ../tts-service && pip install -r requirements.txt",
+    "start": "npm run dev",
+    "setup": "npm run install:all && echo 'Setup complete. Run \"npm run dev\" to start all services.'"
+  },
+  "keywords": [
+    "video-generation",
+    "text-to-speech",
+    "remotion",
+    "react",
+    "nodejs",
+    "fastapi",
+    "minio",
+    "mongodb"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "python": ">=3.8.0"
+  }
+}

@@ -2,6 +2,7 @@ const express = require('express');
 const { renderMedia, selectComposition } = require('@remotion/renderer');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const { exec } = require('child_process');
 const util = require('util');
 const execAsync = util.promisify(exec);
@@ -23,7 +24,7 @@ router.post('/render', async (req, res) => {
     }, outputPath } = req.body;
 
     // Determine output path
-    const finalOutputPath = outputPath || path.join('/app/storage/videos', `${compositionId}-${Date.now()}.mp4`);
+    const finalOutputPath = outputPath || path.join(__dirname, '../../../storage/videos', `${compositionId}-${Date.now()}.mp4`);
     console.log('Final output path:', finalOutputPath);
 
     // Create video job record
@@ -79,7 +80,7 @@ router.post('/generate-with-audio', async (req, res) => {
     }
 
     // Determine output path
-    const finalOutputPath = outputPath || path.join('/app/storage/videos', `audio-video-${Date.now()}.mp4`);
+    const finalOutputPath = outputPath || path.join(__dirname, '../../../storage/videos', `audio-video-${Date.now()}.mp4`);
     console.log('Final output path:', finalOutputPath);
 
     // Create video job record
@@ -232,6 +233,7 @@ async function renderVideoAsync(jobId, compositionId, inputProps, outputPath) {
 async function generateAudioVideoAsync(jobId, text, lang, compositionId, inputProps, outputPath) {
   let tempAudioPath = null;
   let tempVideoPath = null;
+  let audioFilePath = null;
 
   try {
     console.log('Starting combined audio-video generation for job:', jobId);
@@ -254,32 +256,23 @@ async function generateAudioVideoAsync(jobId, text, lang, compositionId, inputPr
     await VideoJob.findByIdAndUpdate(jobId, { progress: 30 });
 
     // Step 2: Download audio file locally for FFmpeg
-    console.log('Step 2: Downloading audio file locally...');
-    tempAudioPath = path.join('/tmp', `audio-${jobId}.mp3`);
+    console.log('Step 2: Downloading audio file locally for FFmpeg...');
+    tempAudioPath = path.join(os.tmpdir(), `audio-${jobId}.mp3`);
 
-    // For local MinIO, construct direct file path
-    let audioFilePath;
-    if (audioMinioUrl.includes('localhost:9000')) {
-      // Extract file path from MinIO URL for local access
-      const urlParts = audioMinioUrl.split('/');
-      const bucket = urlParts[urlParts.length - 2];
-      const fileName = urlParts[urlParts.length - 1];
-      audioFilePath = path.join('/app/storage/audio', fileName);
-      console.log('Using local audio file path:', audioFilePath);
-    } else {
-      // For remote MinIO, download the file
-      const audioResponse = await axios.get(audioMinioUrl, { responseType: 'stream' });
-      const audioWriter = fs.createWriteStream(tempAudioPath);
-      audioResponse.data.pipe(audioWriter);
+    // Always download the audio file from MinIO for FFmpeg processing
+    // since the TTS service cleans up the local file after upload
+    console.log('Downloading audio from MinIO for FFmpeg processing...');
+    const audioResponse = await axios.get(audioMinioUrl, { responseType: 'stream' });
+    const audioWriter = fs.createWriteStream(tempAudioPath);
+    audioResponse.data.pipe(audioWriter);
 
-      await new Promise((resolve, reject) => {
-        audioWriter.on('finish', resolve);
-        audioWriter.on('error', reject);
-      });
-      audioFilePath = tempAudioPath;
-    }
+    await new Promise((resolve, reject) => {
+      audioWriter.on('finish', resolve);
+      audioWriter.on('error', reject);
+    });
 
-    console.log('Audio file path for FFmpeg:', audioFilePath);
+    const audioFilePath = tempAudioPath;
+    console.log('Audio file downloaded for FFmpeg:', audioFilePath);
 
     // Update progress
     await VideoJob.findByIdAndUpdate(jobId, { progress: 40 });
@@ -317,7 +310,7 @@ async function generateAudioVideoAsync(jobId, text, lang, compositionId, inputPr
     }
 
     // Generate temporary video path
-    tempVideoPath = path.join('/tmp', `video-${jobId}.mp4`);
+    tempVideoPath = path.join(os.tmpdir(), `video-${jobId}.mp4`);
 
     // Render the video
     console.log('Starting video render...');
@@ -343,7 +336,7 @@ async function generateAudioVideoAsync(jobId, text, lang, compositionId, inputPr
     // Step 4: Merge audio and video using FFmpeg
     console.log('Step 4: Merging audio and video with FFmpeg...');
 
-    const mergedOutputPath = path.join('/tmp', `merged-${jobId}.mp4`);
+    const mergedOutputPath = path.join(os.tmpdir(), `merged-${jobId}.mp4`);
 
     // FFmpeg command to merge audio and video
     const ffmpegCommand = `ffmpeg -i "${tempVideoPath}" -i "${audioFilePath}" -c:v copy -c:a aac -map 0:v:0 -map 1:a:0 -shortest "${mergedOutputPath}"`;
@@ -396,7 +389,7 @@ async function generateAudioVideoAsync(jobId, text, lang, compositionId, inputPr
         fs.unlinkSync(tempVideoPath);
         console.log('Cleaned up temporary video file');
       }
-      const mergedPath = path.join('/tmp', `merged-${jobId}.mp4`);
+      const mergedPath = path.join(os.tmpdir(), `merged-${jobId}.mp4`);
       if (fs.existsSync(mergedPath)) {
         fs.unlinkSync(mergedPath);
         console.log('Cleaned up temporary merged file');
