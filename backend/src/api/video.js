@@ -165,6 +165,20 @@ async function renderVideoAsync(jobId, compositionId, inputProps, outputPath) {
       outputLocation: outputPath,
       inputProps,
       browserExecutable: null,
+      concurrency: 4, // Render 4 frames in parallel for faster processing
+      puppeteerLaunchOptions: {
+        args: [
+          '--enable-gpu',
+          '--use-gl=desktop',
+          '--enable-webgl',
+          '--ignore-gpu-blacklist',
+          '--disable-software-rasterizer',
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage', // Prevent crashes in containers
+          '--disable-gpu-sandbox'
+        ]
+      },
       onProgress: ({ progress }) => {
         console.log('Render progress:', progress);
         // Update progress in database
@@ -249,8 +263,9 @@ async function generateAudioVideoAsync(jobId, text, lang, compositionId, inputPr
       lang,
     });
 
-    const { url: audioMinioUrl } = ttsResponse.data;
+    const { url: audioMinioUrl, duration: audioDuration } = ttsResponse.data;
     console.log('TTS audio generated:', audioMinioUrl);
+    console.log('Audio duration:', audioDuration, 'seconds');
 
     // Update progress
     await VideoJob.findByIdAndUpdate(jobId, { progress: 30 });
@@ -279,7 +294,17 @@ async function generateAudioVideoAsync(jobId, text, lang, compositionId, inputPr
 
     // Step 3: Generate video with audio URL
     console.log('Step 3: Generating video with audio...');
-    const videoInputProps = { ...inputProps, audioUrl: audioMinioUrl };
+
+    // Calculate video duration to match audio duration
+    const fps = 30; // Assuming 30fps
+    const videoDurationInFrames = Math.ceil(audioDuration * fps);
+    console.log('Calculated video duration:', videoDurationInFrames, 'frames');
+
+    const videoInputProps = {
+      ...inputProps,
+      audioUrl: audioMinioUrl,
+      durationInFrames: videoDurationInFrames
+    };
 
     // Path to the Remotion project
     const remotionPath = path.join(__dirname, '../remotion');
@@ -312,7 +337,7 @@ async function generateAudioVideoAsync(jobId, text, lang, compositionId, inputPr
     // Generate temporary video path
     tempVideoPath = path.join(os.tmpdir(), `video-${jobId}.mp4`);
 
-    // Render the video
+    // Render the video (composition registered with long duration, component uses prop)
     console.log('Starting video render...');
     await renderMedia({
       composition,
@@ -321,6 +346,20 @@ async function generateAudioVideoAsync(jobId, text, lang, compositionId, inputPr
       outputLocation: tempVideoPath,
       inputProps: videoInputProps,
       browserExecutable: null,
+      concurrency: 4, // Render 4 frames in parallel for faster processing
+      puppeteerLaunchOptions: {
+        args: [
+          '--enable-gpu',
+          '--use-gl=desktop',
+          '--enable-webgl',
+          '--ignore-gpu-blacklist',
+          '--disable-software-rasterizer',
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage', // Prevent crashes in containers
+          '--disable-gpu-sandbox'
+        ]
+      },
       onProgress: ({ progress }) => {
         const videoProgress = 40 + Math.round(progress * 40); // 40-80%
         VideoJob.findByIdAndUpdate(jobId, { progress: videoProgress }).catch(err =>

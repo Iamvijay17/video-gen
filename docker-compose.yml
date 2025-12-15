@@ -37,6 +37,8 @@ services:
       - VIDEO_BUCKET=video-gen-videos
       - PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
       - PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics
     restart: unless-stopped
     depends_on:
       - db
@@ -47,9 +49,7 @@ services:
       resources:
         reservations:
           devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
+            - capabilities: [gpu]
 
   tts:
     build:

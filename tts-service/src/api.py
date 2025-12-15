@@ -9,6 +9,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from minio import Minio
 from minio.error import S3Error
+from mutagen.mp3 import MP3
 
 # Load environment variables
 load_dotenv()
@@ -75,7 +76,7 @@ def initialize_minio_bucket():
         print(f"MinIO error: {e}")
 
 # Initialize bucket on startup
-initialize_minio_bucket()
+# initialize_minio_bucket()  # Commented out for dev without MinIO
 
 class TTSRequest(BaseModel):
     text: str
@@ -98,6 +99,11 @@ async def generate_speech(request: TTSRequest):
         tts = gTTS(text=request.text, lang=request.lang, slow=False)
         tts.save(str(filepath))
 
+        # Get audio duration
+        audio = MP3(str(filepath))
+        duration = audio.info.length
+        print(f"Audio duration: {duration} seconds")
+
         # Upload to MinIO
         try:
             minio_client.fput_object(
@@ -111,23 +117,28 @@ async def generate_speech(request: TTSRequest):
             filepath.unlink()
             print("Local audio file cleaned up")
 
-            # Return MinIO URL
+            # Return MinIO URL with duration
             minio_url = f"http://localhost:9000/{AUDIO_BUCKET}/{minio_path}"
             return {
                 "success": True,
                 "file_id": file_id,
                 "filename": filename,
-                "url": minio_url
+                "url": minio_url,
+                "duration": duration
             }
 
-        except S3Error as upload_error:
+        except Exception as upload_error:
             print(f"MinIO upload failed: {upload_error}")
             # Return local URL as fallback
+            host = os.getenv("HOST", "127.0.0.1")
+            port = int(os.getenv("PORT", 5000))
+            local_url = f"http://{host}:{port}/audio/{filename}"
             return {
                 "success": True,
                 "file_id": file_id,
                 "filename": filename,
-                "url": f"/audio/{filename}"
+                "url": local_url,
+                "duration": duration
             }
 
     except Exception as e:

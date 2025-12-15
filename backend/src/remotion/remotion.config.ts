@@ -6,7 +6,10 @@
 import { Config } from "@remotion/cli/config";
 import { enableTailwind } from '@remotion/tailwind-v4';
 
-Config.setVideoImageFormat("jpeg");
+// Performance optimizations
+Config.setVideoImageFormat("png"); // PNG is faster than JPEG for rendering
 Config.setOverwriteOutput(true);
 Config.setBrowserExecutable(null);
+Config.setPixelFormat("yuv420p"); // Better compatibility and performance
+Config.setCodec("h264"); // Explicitly set codec
 Config.overrideWebpackConfig(enableTailwind);

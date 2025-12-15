@@ -13,7 +13,7 @@ export const RemotionRoot: React.FC = () => {
         // npx remotion render HelloWorld
         id="HelloWorld"
         component={HelloWorld}
-        durationInFrames={150}
+        durationInFrames={150} // Default 5 seconds at 30fps - will be overridden by props
         fps={30}
         width={1920}
         height={1080}
@@ -26,6 +26,7 @@ export const RemotionRoot: React.FC = () => {
           logoColor1: "#91EAE4",
           logoColor2: "#86A8E7",
           audioUrl: undefined,
+          durationInFrames: 150, // Default fallback
         }}
       />
 

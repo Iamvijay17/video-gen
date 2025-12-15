@@ -19,6 +19,7 @@ export const myCompSchema = z.object({
   logoColor1: zColor(),
   logoColor2: zColor(),
   audioUrl: z.string().optional(),
+  durationInFrames: z.number().optional(),
 });
 
 export const HelloWorld: React.FC<z.infer<typeof myCompSchema>> = ({
@@ -27,36 +28,69 @@ export const HelloWorld: React.FC<z.infer<typeof myCompSchema>> = ({
   logoColor1,
   logoColor2,
   audioUrl,
+  durationInFrames: customDuration,
 }) => {
   const frame = useCurrentFrame();
-  const { durationInFrames, fps } = useVideoConfig();
+  const { fps } = useVideoConfig();
+  const durationInFrames = customDuration || 150; // Use prop value or default
 
-  // Animate from 0 to 1 after 25 frames
-  const logoTranslationProgress = spring({
-    frame: frame - 25,
-    fps,
-    config: {
-      damping: 100,
-    },
-  });
+  // Debug logging
+  if (frame === 0) {
+    console.log('HelloWorld component initialized with duration:', durationInFrames, 'frames');
+  }
 
-  // Move the logo up by 150 pixels once the transition starts
-  const logoTranslation = interpolate(
-    logoTranslationProgress,
-    [0, 1],
-    [0, -150],
-  );
+  // For longer videos, simplify animations to avoid performance issues
+  const isLongVideo = durationInFrames > 300; // More than 10 seconds
 
-  // Fade out the animation at the end
-  const opacity = interpolate(
-    frame,
-    [durationInFrames - 25, durationInFrames - 15],
-    [1, 0],
-    {
-      extrapolateLeft: "clamp",
-      extrapolateRight: "clamp",
-    },
-  );
+  let logoTranslation = 0;
+  let opacity = 1;
+
+  if (!isLongVideo) {
+    // Use spring animation for short videos
+    const logoTranslationProgress = spring({
+      frame: frame - 25,
+      fps,
+      config: {
+        damping: 100,
+      },
+    });
+
+    logoTranslation = interpolate(
+      logoTranslationProgress,
+      [0, 1],
+      [0, -150],
+    );
+
+    // Fade out the animation at the end
+    opacity = interpolate(
+      frame,
+      [durationInFrames - 25, durationInFrames - 15],
+      [1, 0],
+      {
+        extrapolateLeft: "clamp",
+        extrapolateRight: "clamp",
+      },
+    );
+  } else {
+    // For long videos, use simpler animations
+    // Logo appears after 25 frames and stays
+    if (frame > 25) {
+      logoTranslation = -150;
+    }
+
+    // Simple fade out at the end
+    if (frame > durationInFrames - 30) {
+      opacity = interpolate(
+        frame,
+        [durationInFrames - 30, durationInFrames],
+        [1, 0],
+        {
+          extrapolateLeft: "clamp",
+          extrapolateRight: "clamp",
+        },
+      );
+    }
+  }
 
   // A <AbsoluteFill> is just a absolutely positioned <div>!
   return (
