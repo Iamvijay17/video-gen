@@ -20,6 +20,7 @@ RUN apt-get update && apt-get install -y \
     libx11-xcb1 \
     libxcb-dri3-0 \
     libxcb-dri2-0 \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Chrome for GPU acceleration

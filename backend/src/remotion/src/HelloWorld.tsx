@@ -5,6 +5,7 @@ import {
   Sequence,
   useCurrentFrame,
   useVideoConfig,
+  Audio,
 } from "remotion";
 import { Logo } from "./HelloWorld/Logo";
 import { Subtitle } from "./HelloWorld/Subtitle";
@@ -17,6 +18,7 @@ export const myCompSchema = z.object({
   titleColor: zColor(),
   logoColor1: zColor(),
   logoColor2: zColor(),
+  audioUrl: z.string().optional(),
 });
 
 export const HelloWorld: React.FC<z.infer<typeof myCompSchema>> = ({
@@ -24,6 +26,7 @@ export const HelloWorld: React.FC<z.infer<typeof myCompSchema>> = ({
   titleColor: propTwo,
   logoColor1,
   logoColor2,
+  audioUrl,
 }) => {
   const frame = useCurrentFrame();
   const { durationInFrames, fps } = useVideoConfig();
@@ -58,6 +61,7 @@ export const HelloWorld: React.FC<z.infer<typeof myCompSchema>> = ({
   // A <AbsoluteFill> is just a absolutely positioned <div>!
   return (
     <AbsoluteFill style={{ backgroundColor: "white" }}>
+      {audioUrl && <Audio src={audioUrl} />}
       <AbsoluteFill style={{ opacity }}>
         <AbsoluteFill style={{ transform: `translateY(${logoTranslation}px)` }}>
           <Logo logoColor1={logoColor1} logoColor2={logoColor2} />

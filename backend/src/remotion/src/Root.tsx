@@ -25,6 +25,7 @@ export const RemotionRoot: React.FC = () => {
           titleColor: "#000000",
           logoColor1: "#91EAE4",
           logoColor2: "#86A8E7",
+          audioUrl: undefined,
         }}
       />
 
