@@ -28,9 +28,17 @@ services:
       - NODE_ENV=production
       - MONGODB_URI=mongodb://admin:password@db:27017/video_gen?authSource=admin
       - TTS_SERVICE_URL=http://tts:5000
+      - MINIO_ENDPOINT=minio
+      - MINIO_PORT=9000
+      - MINIO_ACCESS_KEY=admin
+      - MINIO_SECRET_KEY=password123
+      - MINIO_USE_SSL=false
+      - AUDIO_BUCKET=video-gen-audio
+      - VIDEO_BUCKET=video-gen-videos
     restart: unless-stopped
     depends_on:
       - db
+      - minio
     networks:
       - video-gen-network
 
@@ -43,11 +51,16 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - OUTPUT_DIR=/app/output/audio
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=admin
+      - MINIO_SECRET_KEY=password123
+      - MINIO_USE_SSL=false
+      - AUDIO_BUCKET=video-gen-audio
     restart: unless-stopped
     volumes:
       - ./storage:/app/output
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5050/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -68,9 +81,32 @@ services:
     networks:
       - video-gen-network
 
+  minio:
+    image: minio/minio:latest
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # MinIO Console
+    volumes:
+      - minio_data:/data
+    environment:
+      - MINIO_ROOT_USER=admin
+      - MINIO_ROOT_PASSWORD=password123
+    command: server /data --console-address ":9001"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - video-gen-network
+
+
 networks:
   video-gen-network:
     driver: bridge
 
 volumes:
   mongodb_data:
+  minio_data:

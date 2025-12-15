@@ -7,6 +7,8 @@ import os
 import uuid
 from pathlib import Path
 from dotenv import load_dotenv
+from minio import Minio
+from minio.error import S3Error
 
 # Load environment variables
 load_dotenv()
@@ -33,6 +35,48 @@ app.add_middleware(
 OUTPUT_DIR = Path(os.getenv("OUTPUT_DIR", "audio"))
 OUTPUT_DIR.mkdir(exist_ok=True)
 
+# MinIO configuration
+MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "minio:9000")
+MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY", "admin")
+MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY", "password123")
+MINIO_USE_SSL = os.getenv("MINIO_USE_SSL", "false").lower() == "true"
+AUDIO_BUCKET = os.getenv("AUDIO_BUCKET", "video-gen-audio")
+
+# Initialize MinIO client
+minio_client = Minio(
+    MINIO_ENDPOINT,
+    access_key=MINIO_ACCESS_KEY,
+    secret_key=MINIO_SECRET_KEY,
+    secure=MINIO_USE_SSL
+)
+
+def initialize_minio_bucket():
+    """Initialize MinIO bucket if it doesn't exist"""
+    try:
+        if not minio_client.bucket_exists(AUDIO_BUCKET):
+            minio_client.make_bucket(AUDIO_BUCKET)
+            print(f"Created bucket: {AUDIO_BUCKET}")
+
+        # Set public read policy
+        policy = {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Principal": {"AWS": "*"},
+                    "Action": ["s3:GetObject"],
+                    "Resource": [f"arn:aws:s3:::{AUDIO_BUCKET}/*"]
+                }
+            ]
+        }
+        minio_client.set_bucket_policy(AUDIO_BUCKET, str(policy).replace("'", '"'))
+        print(f"Set public policy for bucket: {AUDIO_BUCKET}")
+    except S3Error as e:
+        print(f"MinIO error: {e}")
+
+# Initialize bucket on startup
+initialize_minio_bucket()
+
 class TTSRequest(BaseModel):
     text: str
     lang: str = "en"
@@ -48,17 +92,43 @@ async def generate_speech(request: TTSRequest):
         file_id = str(uuid.uuid4())
         filename = f"{file_id}.mp3"
         filepath = OUTPUT_DIR / filename
+        minio_path = f"audio/{filename}"
 
         # Generate speech
         tts = gTTS(text=request.text, lang=request.lang, slow=False)
         tts.save(str(filepath))
 
-        return {
-            "success": True,
-            "file_id": file_id,
-            "filename": filename,
-            "url": f"/audio/{filename}"
-        }
+        # Upload to MinIO
+        try:
+            minio_client.fput_object(
+                AUDIO_BUCKET,
+                minio_path,
+                str(filepath)
+            )
+            print(f"Audio uploaded to MinIO: {minio_path}")
+
+            # Clean up local file
+            filepath.unlink()
+            print("Local audio file cleaned up")
+
+            # Return MinIO URL
+            minio_url = f"http://localhost:9000/{AUDIO_BUCKET}/{minio_path}"
+            return {
+                "success": True,
+                "file_id": file_id,
+                "filename": filename,
+                "url": minio_url
+            }
+
+        except S3Error as upload_error:
+            print(f"MinIO upload failed: {upload_error}")
+            # Return local URL as fallback
+            return {
+                "success": True,
+                "file_id": file_id,
+                "filename": filename,
+                "url": f"/audio/{filename}"
+            }
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"TTS generation failed: {str(e)}")

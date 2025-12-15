@@ -54,15 +54,17 @@ const TTSGenerator = () => {
 
   const handlePlay = () => {
     if (generatedAudio?.url) {
-      const audio = new Audio(`http://localhost:5050${generatedAudio.url}`);
+      // generatedAudio.url now contains the full MinIO URL
+      const audio = new Audio(generatedAudio.url);
       audio.play();
     }
   };
 
   const handleDownload = () => {
     if (generatedAudio?.url) {
+      // generatedAudio.url now contains the full MinIO URL
       const link = document.createElement('a');
-      link.href = `http://localhost:5050${generatedAudio.url}`;
+      link.href = generatedAudio.url;
       link.download = generatedAudio.filename;
       document.body.appendChild(link);
       link.click();

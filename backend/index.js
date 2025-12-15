@@ -1,12 +1,16 @@
 const express = require('express');
 const cors = require('cors');
 const connectDB = require('./src/config/database');
+const { initializeBuckets } = require('./src/config/minio');
 
 const app = express();
 const PORT = process.env.PORT || 8000;
 
 // Connect to MongoDB
-connectDB();
+connectDB().catch(err => console.error('Database connection failed:', err));
+
+// Initialize MinIO buckets
+initializeBuckets().catch(err => console.error('MinIO initialization failed:', err));
 
 // CORS middleware
 app.use(cors({
@@ -25,13 +29,15 @@ app.use(cors({
 app.use(express.json());
 
 // Static file serving for storage
-app.use('/storage', express.static('storage'));
+app.use('/storage', express.static('../storage'));
 
 // Routes
 const videoRoutes = require('./src/api/video');
 const ttsRoutes = require('./src/api/tts');
+const storageRoutes = require('./src/api/storage');
 app.use('/api/video', videoRoutes);
 app.use('/api/tts', ttsRoutes);
+app.use('/api/storage', storageRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {

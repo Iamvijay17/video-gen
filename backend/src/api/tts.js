@@ -2,6 +2,7 @@ const express = require('express');
 const axios = require('axios');
 const TTSRequest = require('../models/TTSRequest');
 const path = require('path');
+const { minioClient, AUDIO_BUCKET } = require('../config/minio');
 
 const router = express.Router();
 
@@ -23,16 +24,16 @@ router.post('/generate', async (req, res) => {
       lang,
     });
 
-    const { file_id, filename, url } = ttsResponse.data;
+    const { file_id, filename, url: minioUrl } = ttsResponse.data;
 
-    // Store in database
+    // Store in database with MinIO URL
     const ttsRequest = new TTSRequest({
       text,
       lang,
       fileId: file_id,
       filename,
-      filePath: path.join(__dirname, '../../../storage/audio', filename),
-      url,
+      filePath: minioUrl, // Store MinIO URL as filePath
+      url: minioUrl, // Store MinIO URL
     });
 
     await ttsRequest.save();
@@ -138,11 +139,13 @@ router.delete('/:fileId', async (req, res) => {
       return res.status(404).json({ error: 'TTS request not found' });
     }
 
-    // Also delete from TTS service
+    // Delete from MinIO
     try {
-      await axios.delete(`${TTS_SERVICE_URL}/audio/${ttsRequest.filename}`);
-    } catch (serviceError) {
-      console.warn('Failed to delete from TTS service:', serviceError.message);
+      const minioPath = `audio/${ttsRequest.filename}`;
+      await minioClient.removeObject(AUDIO_BUCKET, minioPath);
+      console.log(`Deleted audio file from MinIO: ${minioPath}`);
+    } catch (minioError) {
+      console.warn('Failed to delete from MinIO:', minioError.message);
     }
 
     res.json({

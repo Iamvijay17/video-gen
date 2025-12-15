@@ -36,15 +36,17 @@ const HistoryView = () => {
 
   const handlePlayTTS = (ttsItem) => {
     if (ttsItem.url) {
-      const audio = new Audio(`http://localhost:5050${ttsItem.url}`);
+      // ttsItem.url now contains the full MinIO URL
+      const audio = new Audio(ttsItem.url);
       audio.play();
     }
   };
 
   const handleDownloadTTS = (ttsItem) => {
     if (ttsItem.url) {
+      // ttsItem.url now contains the full MinIO URL
       const link = document.createElement('a');
-      link.href = `http://localhost:5050${ttsItem.url}`;
+      link.href = ttsItem.url;
       link.download = ttsItem.filename;
       document.body.appendChild(link);
       link.click();
@@ -101,14 +103,9 @@ const HistoryView = () => {
   };
 
   const getVideoUrl = (outputPath) => {
-    // Convert file path to HTTP URL
-    // Assuming outputPath is something like '/path/to/project/storage/videos/filename.mp4'
-    // We need to extract just the relative path from storage
-    const pathParts = outputPath.split('storage');
-    if (pathParts.length > 1) {
-      return `http://localhost:8000/storage${pathParts[1]}`;
-    }
-    return null;
+    // outputPath now contains the full MinIO URL
+    // e.g., "http://localhost:9000/video-gen-videos/videos/filename.mp4"
+    return outputPath;
   };
 
   const toggleVideoPreview = (jobId) => {

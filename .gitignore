@@ -145,3 +145,6 @@ backend/src/remotion/node_modules
 __pycache__
 
 backend/src/.DS_Store
+
+# MinIO configuration
+.minio
