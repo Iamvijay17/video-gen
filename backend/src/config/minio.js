@@ -28,8 +28,41 @@ async function initializeBuckets() {
       console.log(`Created bucket: ${VIDEO_BUCKET}`);
     }
 
-    // Note: MinIO bucket policies can be set via the web console if needed
-    // For now, we'll skip setting policies programmatically to avoid format issues
+    // Set public read policy for both buckets using MinIO-compatible format
+    const publicPolicy = JSON.stringify({
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Effect": "Allow",
+          "Principal": {"AWS": "*"},
+          "Action": ["s3:GetObject"],
+          "Resource": [`arn:aws:s3:::${AUDIO_BUCKET}/*`]
+        }
+      ]
+    });
+
+    const videoPolicy = JSON.stringify({
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Effect": "Allow",
+          "Principal": {"AWS": "*"},
+          "Action": ["s3:GetObject"],
+          "Resource": [`arn:aws:s3:::${VIDEO_BUCKET}/*`]
+        }
+      ]
+    });
+
+    try {
+      await minioClient.setBucketPolicy(AUDIO_BUCKET, publicPolicy);
+      console.log(`Public policy set for bucket: ${AUDIO_BUCKET}`);
+
+      await minioClient.setBucketPolicy(VIDEO_BUCKET, videoPolicy);
+      console.log(`Public policy set for bucket: ${VIDEO_BUCKET}`);
+    } catch (policyError) {
+      console.warn('Failed to set bucket policies:', policyError.message);
+      console.warn('Policy error details:', policyError);
+    }
 
     console.log('MinIO buckets initialized successfully');
   } catch (error) {

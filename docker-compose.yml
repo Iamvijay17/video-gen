@@ -35,12 +35,21 @@ services:
       - MINIO_USE_SSL=false
       - AUDIO_BUCKET=video-gen-audio
       - VIDEO_BUCKET=video-gen-videos
+      - PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+      - PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
     restart: unless-stopped
     depends_on:
       - db
       - minio
     networks:
       - video-gen-network
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
 
   tts:
     build:
@@ -67,6 +76,13 @@ services:
       start_period: 40s
     networks:
       - video-gen-network
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
 
   db:
     image: mongo:7-jammy

@@ -1,0 +1,9 @@
+{
+  "compositionId": "HelloWorld",
+  "inputProps": {
+    "titleText": "GPU Test Video",
+    "titleColor": "#FF0000",
+    "logoColor1": "#00FF00",
+    "logoColor2": "#0000FF"
+  }
+}

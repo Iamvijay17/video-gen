@@ -95,14 +95,15 @@ async function renderVideoAsync(jobId, compositionId, inputProps, outputPath) {
       console.log('Output directory already exists');
     }
 
-    // Render the video with progress tracking
-    console.log('Starting renderMedia call...');
+    // Render the video with progress tracking and GPU acceleration
+    console.log('Starting renderMedia call with GPU acceleration...');
     await renderMedia({
       composition,
       serveUrl: bundleLocation,
       codec: 'h264',
       outputLocation: outputPath,
       inputProps,
+      browserExecutable: null,
       onProgress: ({ progress }) => {
         console.log('Render progress:', progress);
         // Update progress in database
@@ -121,7 +122,7 @@ async function renderVideoAsync(jobId, compositionId, inputProps, outputPath) {
 
       // Upload to MinIO
       const fileName = path.basename(outputPath);
-      const minioPath = `videos/${fileName}`;
+      const minioPath = `video-gen-videos/videos/${fileName}`;
 
       try {
         await minioClient.fPutObject(VIDEO_BUCKET, minioPath, outputPath);

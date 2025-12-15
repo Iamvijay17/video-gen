@@ -8,5 +8,5 @@ import { enableTailwind } from '@remotion/tailwind-v4';
 
 Config.setVideoImageFormat("jpeg");
 Config.setOverwriteOutput(true);
-Config.setBrowserExecutable('/usr/bin/chromium-browser');
+Config.setBrowserExecutable(null);
 Config.overrideWebpackConfig(enableTailwind);
