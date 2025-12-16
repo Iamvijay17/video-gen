@@ -92,6 +92,15 @@ export const HelloWorld: React.FC<z.infer<typeof myCompSchema>> = ({
     }
   }
 
+  // Don't render anything if we've exceeded the desired duration
+  if (frame >= durationInFrames) {
+    return (
+      <AbsoluteFill style={{ backgroundColor: "white" }}>
+        {audioUrl && <Audio src={audioUrl} />}
+      </AbsoluteFill>
+    );
+  }
+
   // A <AbsoluteFill> is just a absolutely positioned <div>!
   return (
     <AbsoluteFill style={{ backgroundColor: "white" }}>

@@ -7,6 +7,17 @@ const { exec } = require('child_process');
 const util = require('util');
 const execAsync = util.promisify(exec);
 const axios = require('axios');
+const ora = require('ora');
+const cliProgress = require('cli-progress');
+// ANSI escape codes for colors
+const red = (text) => `\x1b[31m${text}\x1b[0m`;
+const green = (text) => `\x1b[32m${text}\x1b[0m`;
+const yellow = (text) => `\x1b[33m${text}\x1b[0m`;
+const blue = (text) => `\x1b[34m${text}\x1b[0m`;
+const magenta = (text) => `\x1b[35m${text}\x1b[0m`;
+const cyan = (text) => `\x1b[36m${text}\x1b[0m`;
+const gray = (text) => `\x1b[37m${text}\x1b[0m`;
+const bold = (text) => `\x1b[1m${text}\x1b[0m`;
 const VideoJob = require('../models/VideoJob');
 const { minioClient, VIDEO_BUCKET } = require('../config/minio');
 
@@ -116,56 +127,121 @@ router.post('/generate-with-audio', async (req, res) => {
 
 // Async function to handle video rendering
 async function renderVideoAsync(jobId, compositionId, inputProps, outputPath) {
+  let tempAudioPath = null;
+  let progressBar = null;
+
   try {
-    console.log('Starting video rendering for job:', jobId);
-    console.log('Output path:', outputPath);
-    console.log('__dirname:', __dirname);
-    console.log('Remotion path:', path.join(__dirname, '../remotion'));
-    console.log('Output directory:', path.dirname(outputPath));
+    console.log(blue(bold('🎬 Starting Video Rendering')));
+    console.log(gray(`Job ID: ${jobId}`));
+    console.log(gray(`Composition: ${compositionId}`));
+    console.log(gray(`Output: ${path.basename(outputPath)}`));
 
     // Update job status to processing
     await VideoJob.findByIdAndUpdate(jobId, { status: 'processing' });
 
-    // Path to the Remotion project
-    const remotionPath = path.join(__dirname, '../remotion');
+    let actualDuration = inputProps.durationInFrames || 150;
+
+    // If audioUrl is provided, calculate duration based on audio
+    if (inputProps.audioUrl) {
+      const audioSpinner = ora({
+        text: yellow('🔊 Analyzing audio duration...'),
+        spinner: 'dots'
+      }).start();
+
+      try {
+        // Download audio file temporarily to get duration
+        tempAudioPath = path.join(os.tmpdir(), `audio-render-${jobId}.mp3`);
+
+        const audioResponse = await axios.get(inputProps.audioUrl, { responseType: 'stream' });
+        const audioWriter = fs.createWriteStream(tempAudioPath);
+        audioResponse.data.pipe(audioWriter);
+
+        await new Promise((resolve, reject) => {
+          audioWriter.on('finish', resolve);
+          audioWriter.on('error', reject);
+        });
+
+        // Get audio duration using FFprobe
+        const ffprobeCommand = `ffprobe -v quiet -print_format json -show_format "${tempAudioPath}"`;
+        const { stdout } = await execAsync(ffprobeCommand);
+        const probeData = JSON.parse(stdout);
+        const audioDuration = parseFloat(probeData.format.duration);
+
+        // Calculate video duration to match audio duration
+        const fps = 30; // Assuming 30fps
+        actualDuration = Math.ceil(audioDuration * fps);
+
+        audioSpinner.succeed(green(`Audio analyzed: ${audioDuration.toFixed(1)}s → ${actualDuration} frames`));
+
+      } catch (audioError) {
+        audioSpinner.fail(red('Audio analysis failed, using default duration'));
+        console.error(red('Error:'), audioError.message);
+        // Keep the default actualDuration
+      }
+    }
 
     // Bundle the Remotion project
-    console.log('Starting bundling...');
+    const bundleSpinner = ora({
+      text: yellow('📦 Bundling Remotion project...'),
+      spinner: 'dots'
+    }).start();
+
+    const remotionPath = path.join(__dirname, '../remotion');
     const bundleLocation = await require('@remotion/bundler').bundle({
       entryPoint: path.join(remotionPath, 'src/index.ts'),
       webpackOverride: (config) => config,
     });
-    console.log('Bundling completed, bundle location:', bundleLocation);
+
+    bundleSpinner.succeed(green('Remotion project bundled successfully'));
+
+    // Update inputProps with calculated duration
+    const updatedInputProps = {
+      ...inputProps,
+      durationInFrames: actualDuration
+    };
 
     // Select the composition
-    console.log('Selecting composition...');
+    const selectSpinner = ora({
+      text: yellow('🎭 Selecting composition...'),
+      spinner: 'dots'
+    }).start();
+
     const composition = await selectComposition({
       serveUrl: bundleLocation,
       id: compositionId,
-      inputProps,
+      inputProps: updatedInputProps,
     });
-    console.log('Composition selected:', composition);
+
+    selectSpinner.succeed(green(`Composition selected: ${compositionId}`));
 
     // Ensure output directory exists
     const outputDir = path.dirname(outputPath);
-    console.log('Creating output directory:', outputDir);
     if (!fs.existsSync(outputDir)) {
       fs.mkdirSync(outputDir, { recursive: true });
-      console.log('Output directory created');
-    } else {
-      console.log('Output directory already exists');
     }
 
+    // Create progress bar for rendering
+    progressBar = new cliProgress.SingleBar({
+      format: cyan('🎬 Rendering Video') + ' |' + cyan('{bar}') + '| {percentage}% | {value}/{total} frames | ETA: {eta}s',
+      barCompleteChar: '\u2588',
+      barIncompleteChar: '\u2591',
+      hideCursor: true
+    });
+
+    progressBar.start(actualDuration, 0);
+
     // Render the video with progress tracking and GPU acceleration
-    console.log('Starting renderMedia call with GPU acceleration...');
+    console.log(blue(bold(`\n🚀 Starting video render (${actualDuration} frames, ${Math.round(actualDuration/30)}s at 30fps)`)));
+
     await renderMedia({
       composition,
       serveUrl: bundleLocation,
       codec: 'h264',
       outputLocation: outputPath,
-      inputProps,
+      inputProps: updatedInputProps,
+      durationInFrames: actualDuration,
       browserExecutable: null,
-      concurrency: 4, // Render 4 frames in parallel for faster processing
+      concurrency: 4,
       puppeteerLaunchOptions: {
         args: [
           '--enable-gpu',
@@ -175,37 +251,46 @@ async function renderVideoAsync(jobId, compositionId, inputProps, outputPath) {
           '--disable-software-rasterizer',
           '--no-sandbox',
           '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage', // Prevent crashes in containers
+          '--disable-dev-shm-usage',
           '--disable-gpu-sandbox'
         ]
       },
       onProgress: ({ progress }) => {
-        console.log('Render progress:', progress);
+        const currentFrame = Math.round(progress * actualDuration);
+        progressBar.update(currentFrame);
         // Update progress in database
         VideoJob.findByIdAndUpdate(jobId, { progress: Math.round(progress * 100) }).catch(err =>
-          console.error('Error updating progress:', err)
+          console.error(red('Error updating progress:'), err.message)
         );
       },
     });
-    console.log('renderMedia call completed');
+
+    progressBar.stop();
+    console.log(green(bold('\n✅ Video rendering completed!')));
 
     // Check if file was actually created
     if (fs.existsSync(outputPath)) {
-      console.log('Video file created successfully:', outputPath);
       const stats = fs.statSync(outputPath);
-      console.log('File size:', stats.size, 'bytes');
+      const fileSizeMB = (stats.size / (1024 * 1024)).toFixed(2);
+
+      console.log(green(`📁 File created: ${path.basename(outputPath)} (${fileSizeMB} MB)`));
 
       // Upload to MinIO
+      const uploadSpinner = ora({
+        text: yellow('☁️  Uploading to MinIO...'),
+        spinner: 'dots'
+      }).start();
+
       const fileName = path.basename(outputPath);
       const minioPath = `video-gen-videos/videos/${fileName}`;
 
       try {
         await minioClient.fPutObject(VIDEO_BUCKET, minioPath, outputPath);
-        console.log('Video uploaded to MinIO:', minioPath);
+
+        uploadSpinner.succeed(green('Video uploaded to MinIO successfully'));
 
         // Clean up local file
         fs.unlinkSync(outputPath);
-        console.log('Local video file cleaned up');
 
         // Update job with MinIO URL
         const minioUrl = `http://localhost:9000/${VIDEO_BUCKET}/${minioPath}`;
@@ -213,12 +298,16 @@ async function renderVideoAsync(jobId, compositionId, inputProps, outputPath) {
           status: 'completed',
           progress: 100,
           completedAt: new Date(),
-          outputPath: minioUrl, // Store MinIO URL instead of local path
+          outputPath: minioUrl,
         });
 
+        console.log(green(bold(`🎉 Job ${jobId} completed successfully!`)));
+        console.log(gray(`URL: ${minioUrl}`));
+
       } catch (uploadError) {
-        console.error('Error uploading to MinIO:', uploadError);
-        // Still mark as completed but keep local file
+        uploadSpinner.fail(red('MinIO upload failed'));
+        console.error(red('Error:'), uploadError.message);
+
         await VideoJob.findByIdAndUpdate(jobId, {
           status: 'completed',
           progress: 100,
@@ -226,20 +315,31 @@ async function renderVideoAsync(jobId, compositionId, inputProps, outputPath) {
         });
       }
 
-      console.log(`Video rendering completed for job ${jobId}`);
     } else {
       throw new Error('Video file was not created despite renderMedia completing');
     }
 
   } catch (error) {
-    console.error('Error rendering video:', error);
-    console.error('Error stack:', error.stack);
+    if (progressBar) progressBar.stop();
+
+    console.error(red('\n❌ Video rendering failed'));
+    console.error(red('Error:'), error.message);
 
     // Update job as failed
     await VideoJob.findByIdAndUpdate(jobId, {
       status: 'failed',
       error: error.message,
-    }).catch(err => console.error('Error updating failed job:', err));
+    }).catch(err => console.error(red('Error updating failed job:'), err.message));
+
+  } finally {
+    // Clean up temporary audio file
+    try {
+      if (tempAudioPath && fs.existsSync(tempAudioPath)) {
+        fs.unlinkSync(tempAudioPath);
+      }
+    } catch (cleanupError) {
+      console.error(red('Error cleaning up temporary audio file:'), cleanupError.message);
+    }
   }
 }
 
@@ -248,15 +348,23 @@ async function generateAudioVideoAsync(jobId, text, lang, compositionId, inputPr
   let tempAudioPath = null;
   let tempVideoPath = null;
   let audioFilePath = null;
+  let progressBar = null;
 
   try {
-    console.log('Starting combined audio-video generation for job:', jobId);
+    console.log(magenta(bold('🎵🎬 Starting Audio-Video Generation')));
+    console.log(gray(`Job ID: ${jobId}`));
+    console.log(gray(`Text: "${text.substring(0, 50)}${text.length > 50 ? '...' : ''}"`));
+    console.log(gray(`Language: ${lang}`));
 
     // Update job status to processing
-    await VideoJob.findByIdAndUpdate(jobId, { status: 'processing', progress: 10 });
+    await VideoJob.findByIdAndUpdate(jobId, { status: 'processing', progress: 5 });
 
     // Step 1: Generate TTS audio
-    console.log('Step 1: Generating TTS audio...');
+    const ttsSpinner = ora({
+      text: yellow('🎤 Generating TTS audio...'),
+      spinner: 'dots'
+    }).start();
+
     const TTS_SERVICE_URL = process.env.TTS_SERVICE_URL || 'http://localhost:5051';
     const ttsResponse = await axios.post(`${TTS_SERVICE_URL}/generate`, {
       text,
@@ -264,19 +372,18 @@ async function generateAudioVideoAsync(jobId, text, lang, compositionId, inputPr
     });
 
     const { url: audioMinioUrl, duration: audioDuration } = ttsResponse.data;
-    console.log('TTS audio generated:', audioMinioUrl);
-    console.log('Audio duration:', audioDuration, 'seconds');
+    ttsSpinner.succeed(green(`TTS generated: ${audioDuration.toFixed(1)}s audio`));
 
     // Update progress
-    await VideoJob.findByIdAndUpdate(jobId, { progress: 30 });
+    await VideoJob.findByIdAndUpdate(jobId, { progress: 25 });
 
     // Step 2: Download audio file locally for FFmpeg
-    console.log('Step 2: Downloading audio file locally for FFmpeg...');
-    tempAudioPath = path.join(os.tmpdir(), `audio-${jobId}.mp3`);
+    const downloadSpinner = ora({
+      text: yellow('📥 Downloading audio for processing...'),
+      spinner: 'dots'
+    }).start();
 
-    // Always download the audio file from MinIO for FFmpeg processing
-    // since the TTS service cleans up the local file after upload
-    console.log('Downloading audio from MinIO for FFmpeg processing...');
+    tempAudioPath = path.join(os.tmpdir(), `audio-${jobId}.mp3`);
     const audioResponse = await axios.get(audioMinioUrl, { responseType: 'stream' });
     const audioWriter = fs.createWriteStream(tempAudioPath);
     audioResponse.data.pipe(audioWriter);
@@ -287,18 +394,18 @@ async function generateAudioVideoAsync(jobId, text, lang, compositionId, inputPr
     });
 
     const audioFilePath = tempAudioPath;
-    console.log('Audio file downloaded for FFmpeg:', audioFilePath);
+    downloadSpinner.succeed(green('Audio downloaded for FFmpeg processing'));
 
     // Update progress
-    await VideoJob.findByIdAndUpdate(jobId, { progress: 40 });
+    await VideoJob.findByIdAndUpdate(jobId, { progress: 35 });
 
     // Step 3: Generate video with audio URL
-    console.log('Step 3: Generating video with audio...');
+    console.log(blue(bold('\n🎬 Generating Video Component')));
 
     // Calculate video duration to match audio duration
-    const fps = 30; // Assuming 30fps
+    const fps = 30;
     const videoDurationInFrames = Math.ceil(audioDuration * fps);
-    console.log('Calculated video duration:', videoDurationInFrames, 'frames');
+    console.log(gray(`Video duration: ${videoDurationInFrames} frames (${Math.round(videoDurationInFrames/fps)}s at ${fps}fps)`));
 
     const videoInputProps = {
       ...inputProps,
@@ -306,47 +413,64 @@ async function generateAudioVideoAsync(jobId, text, lang, compositionId, inputPr
       durationInFrames: videoDurationInFrames
     };
 
-    // Path to the Remotion project
-    const remotionPath = path.join(__dirname, '../remotion');
-
     // Bundle the Remotion project
-    console.log('Starting bundling...');
+    const bundleSpinner = ora({
+      text: yellow('📦 Bundling Remotion project...'),
+      spinner: 'dots'
+    }).start();
+
+    const remotionPath = path.join(__dirname, '../remotion');
     const bundleLocation = await require('@remotion/bundler').bundle({
       entryPoint: path.join(remotionPath, 'src/index.ts'),
       webpackOverride: (config) => config,
     });
-    console.log('Bundling completed, bundle location:', bundleLocation);
+
+    bundleSpinner.succeed(green('Remotion project bundled'));
 
     // Select the composition
-    console.log('Selecting composition...');
+    const selectSpinner = ora({
+      text: yellow('🎭 Selecting composition...'),
+      spinner: 'dots'
+    }).start();
+
     const composition = await selectComposition({
       serveUrl: bundleLocation,
       id: compositionId,
       inputProps: videoInputProps,
     });
-    console.log('Composition selected:', composition);
+
+    selectSpinner.succeed(green(`Composition selected: ${compositionId}`));
 
     // Ensure output directory exists
     const outputDir = path.dirname(outputPath);
-    console.log('Creating output directory:', outputDir);
     if (!fs.existsSync(outputDir)) {
       fs.mkdirSync(outputDir, { recursive: true });
-      console.log('Output directory created');
     }
 
     // Generate temporary video path
     tempVideoPath = path.join(os.tmpdir(), `video-${jobId}.mp4`);
 
-    // Render the video (composition registered with long duration, component uses prop)
-    console.log('Starting video render...');
+    // Create progress bar for video rendering
+    progressBar = new cliProgress.SingleBar({
+      format: cyan('🎬 Rendering Video') + ' |' + cyan('{bar}') + '| {percentage}% | {value}/{total} frames | ETA: {eta}s',
+      barCompleteChar: '\u2588',
+      barIncompleteChar: '\u2591',
+      hideCursor: true
+    });
+
+    progressBar.start(videoDurationInFrames, 0);
+
+    console.log(blue(bold(`🚀 Rendering video (${videoDurationInFrames} frames)...`)));
+
     await renderMedia({
       composition,
       serveUrl: bundleLocation,
       codec: 'h264',
       outputLocation: tempVideoPath,
       inputProps: videoInputProps,
+      durationInFrames: videoDurationInFrames,
       browserExecutable: null,
-      concurrency: 4, // Render 4 frames in parallel for faster processing
+      concurrency: 4,
       puppeteerLaunchOptions: {
         args: [
           '--enable-gpu',
@@ -356,44 +480,52 @@ async function generateAudioVideoAsync(jobId, text, lang, compositionId, inputPr
           '--disable-software-rasterizer',
           '--no-sandbox',
           '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage', // Prevent crashes in containers
+          '--disable-dev-shm-usage',
           '--disable-gpu-sandbox'
         ]
       },
       onProgress: ({ progress }) => {
-        const videoProgress = 40 + Math.round(progress * 40); // 40-80%
+        const currentFrame = Math.round(progress * videoDurationInFrames);
+        progressBar.update(currentFrame);
+        const videoProgress = 35 + Math.round(progress * 40); // 35-75%
         VideoJob.findByIdAndUpdate(jobId, { progress: videoProgress }).catch(err =>
-          console.error('Error updating progress:', err)
+          console.error(red('Error updating progress:'), err.message)
         );
       },
     });
-    console.log('Video rendering completed');
+
+    progressBar.stop();
+    console.log(green(bold('\n✅ Video rendering completed!')));
 
     // Update progress
     await VideoJob.findByIdAndUpdate(jobId, { progress: 80 });
 
     // Step 4: Merge audio and video using FFmpeg
-    console.log('Step 4: Merging audio and video with FFmpeg...');
+    const mergeSpinner = ora({
+      text: yellow('🔄 Merging audio and video...'),
+      spinner: 'dots'
+    }).start();
 
     const mergedOutputPath = path.join(os.tmpdir(), `merged-${jobId}.mp4`);
-
-    // FFmpeg command to merge audio and video
     const ffmpegCommand = `ffmpeg -i "${tempVideoPath}" -i "${audioFilePath}" -c:v copy -c:a aac -map 0:v:0 -map 1:a:0 -shortest "${mergedOutputPath}"`;
 
-    console.log('Running FFmpeg command:', ffmpegCommand);
     await execAsync(ffmpegCommand);
-    console.log('FFmpeg merge completed');
+    mergeSpinner.succeed(green('Audio and video merged successfully'));
 
     // Update progress
     await VideoJob.findByIdAndUpdate(jobId, { progress: 90 });
 
     // Step 5: Upload final video to MinIO
-    console.log('Step 5: Uploading final video to MinIO...');
+    const uploadSpinner = ora({
+      text: yellow('☁️  Uploading final video to MinIO...'),
+      spinner: 'dots'
+    }).start();
+
     const fileName = path.basename(outputPath);
     const minioPath = `video-gen-videos/videos/${fileName}`;
 
     await minioClient.fPutObject(VIDEO_BUCKET, minioPath, mergedOutputPath);
-    console.log('Final video uploaded to MinIO:', minioPath);
+    uploadSpinner.succeed(green('Video uploaded to MinIO successfully'));
 
     // Update job with MinIO URL
     const minioUrl = `http://localhost:9000/${VIDEO_BUCKET}/${minioPath}`;
@@ -404,37 +536,36 @@ async function generateAudioVideoAsync(jobId, text, lang, compositionId, inputPr
       outputPath: minioUrl,
     });
 
-    console.log(`Audio-video generation completed for job ${jobId}`);
+    console.log(green(bold(`\n🎉 Audio-Video generation completed for job ${jobId}!`)));
+    console.log(gray(`URL: ${minioUrl}`));
 
   } catch (error) {
-    console.error('Error in combined audio-video generation:', error);
-    console.error('Error stack:', error.stack);
+    if (progressBar) progressBar.stop();
+
+    console.error(red(bold('\n❌ Audio-Video generation failed')));
+    console.error(red('Error:'), error.message);
 
     // Update job as failed
     await VideoJob.findByIdAndUpdate(jobId, {
       status: 'failed',
       error: error.message,
-    }).catch(err => console.error('Error updating failed job:', err));
+    }).catch(err => console.error(red('Error updating failed job:'), err.message));
 
   } finally {
     // Clean up temporary files
     try {
-      // Only clean up tempAudioPath if it's different from audioFilePath (i.e., if we downloaded it)
       if (tempAudioPath && tempAudioPath !== audioFilePath && fs.existsSync(tempAudioPath)) {
         fs.unlinkSync(tempAudioPath);
-        console.log('Cleaned up temporary audio file');
       }
       if (tempVideoPath && fs.existsSync(tempVideoPath)) {
         fs.unlinkSync(tempVideoPath);
-        console.log('Cleaned up temporary video file');
       }
       const mergedPath = path.join(os.tmpdir(), `merged-${jobId}.mp4`);
       if (fs.existsSync(mergedPath)) {
         fs.unlinkSync(mergedPath);
-        console.log('Cleaned up temporary merged file');
       }
     } catch (cleanupError) {
-      console.error('Error cleaning up temporary files:', cleanupError);
+      console.error(red('Error cleaning up temporary files:'), cleanupError.message);
     }
   }
 }

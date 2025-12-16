@@ -13,7 +13,7 @@ export const RemotionRoot: React.FC = () => {
         // npx remotion render HelloWorld
         id="HelloWorld"
         component={HelloWorld}
-        durationInFrames={150} // Default 5 seconds at 30fps - will be overridden by props
+        durationInFrames={18000} // 10 minutes maximum - component handles actual duration
         fps={30}
         width={1920}
         height={1080}
